@@ -2,17 +2,13 @@ services:
   web:
     build: .
     image: creditos-sm-perfumes:latest
-    container_name: creditos-sm-perfumes
     restart: unless-stopped
     depends_on:
       - api
-    ports:
-      - "8084:80"
 
   api:
     build: ./api
     image: creditos-sm-perfumes-api:latest
-    container_name: creditos-sm-perfumes-api
     restart: unless-stopped
     environment:
       ADMIN_TOKEN: ${ADMIN_TOKEN:?Define ADMIN_TOKEN in .env (ver .env.example)}

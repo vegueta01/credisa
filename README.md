@@ -16,7 +16,8 @@ api/
   server.js                → API mínima (Node, sin dependencias) que guarda qué perfumes están agotados
   Dockerfile
 Dockerfile                 → imagen del sitio (Nginx)
-docker-compose.yml         → servicios "web" + "api"
+docker-compose.yml         → servicios "web" + "api" (el que usa EasyPanel/VPS, sin ports ni container_name)
+docker-compose.local.yml   → SOLO para probar en tu Mac: agrega el puerto 8084 y nombres fijos de contenedor
 nginx.conf
 .env.example               → plantilla del token del panel (copiar a .env, que NO se sube a git)
 hombre/ mujer/              → imágenes originales sin procesar (NO se despliegan, quedan como respaldo)
@@ -24,38 +25,26 @@ hombre/ mujer/              → imágenes originales sin procesar (NO se desplie
 
 ## Correr en local
 
+`docker-compose.yml` a secas no publica ningún puerto (así lo requiere EasyPanel, ver abajo), así que en tu máquina hay que sumarle `docker-compose.local.yml`, que le agrega el puerto 8084 y nombres fijos de contenedor solo para pruebas:
+
 ```bash
 cp .env.example .env   # solo la primera vez — pon tu propio ADMIN_TOKEN
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 # abrir http://localhost:8084
 ```
 
 Esto levanta dos servicios: `web` (Nginx, sirve el sitio) y `api` (guarda qué perfumes están agotados).
 
-## Desplegar en la VPS
+## Desplegar en la VPS (EasyPanel)
 
-1. Copiar esta carpeta al servidor (rsync/scp/git):
-   ```bash
-   rsync -avz --exclude 'hombre' --exclude 'mujer' ./ usuario@tu-vps:/opt/perfumes/
-   ```
-2. En la VPS, con Docker y Docker Compose instalados, crea el `.env` (no viaja por git) con tu propio token:
-   ```bash
-   cd /opt/perfumes
-   cp .env.example .env
-   nano .env               # pon un ADMIN_TOKEN largo y propio (openssl rand -hex 24)
-   docker compose up -d --build
-   ```
-   El sitio queda escuchando en el puerto **8084** del host (ver `docker-compose.yml`). El estado de "agotado" se guarda en el volumen Docker `stock-data`, así que sobrevive a los redeploys (`docker compose up -d --build` no lo borra).
+Este proyecto corre en EasyPanel, que orquesta sus propios nombres de contenedor y el enrutamiento del dominio hacia el puerto del contenedor. Por eso `docker-compose.yml` **no** trae `container_name` ni `ports` — si los tuviera, EasyPanel avisa que "pueden causar conflictos" (es justo el warning que viste). No agregues esos campos ahí; para pruebas locales usa `docker-compose.local.yml` como se explicó arriba.
 
-3. **Exponerlo al público**, dos opciones:
-   - **Directo en el puerto 80/443**: cambia en `docker-compose.yml` el mapeo a `"80:80"` (y agrega un contenedor de Certbot/Nginx si quieres HTTPS propio).
-   - **Detrás de un reverse proxy** (recomendado si ya usas Nginx/Traefik/Caddy en la VPS para varios sitios): apunta tu proxy al `http://127.0.0.1:8084` y configura el certificado SSL ahí (por ejemplo con Certbot para tu dominio).
+1. Sube el repo (git) o copia la carpeta al servidor — EasyPanel normalmente despliega directo desde el repositorio de Git.
+2. En EasyPanel, crea la app apuntando a este `docker-compose.yml` y define la variable de entorno **`ADMIN_TOKEN`** en la sección de variables del servicio `api` (un valor propio, largo — `openssl rand -hex 24`). No hace falta archivo `.env` en el servidor si EasyPanel te deja poner variables de entorno desde su UI; si prefieres usar `.env`, créalo igual que en local (`cp .env.example .env` y edítalo) en la carpeta del proyecto en la VPS.
+3. En la configuración de dominio de EasyPanel, apunta el dominio al servicio **`web`**, puerto **80** (ese es el que expone su Dockerfile). EasyPanel se encarga del certificado SSL.
+4. El estado de "agotado" se guarda en el volumen Docker `stock-data`, así que sobrevive a los redeploys.
 
-4. Actualizar el sitio después de un cambio:
-   ```bash
-   git pull   # o vuelve a copiar los archivos
-   docker compose up -d --build
-   ```
+Actualizar el sitio después de un cambio: vuelve a desplegar desde EasyPanel (o `docker compose up -d --build` si entras por SSH directamente).
 
 ## Cómo agregar o quitar un perfume
 

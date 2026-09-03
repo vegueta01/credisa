@@ -1,0 +1,15 @@
+# Solo para probar en tu máquina. NO lo uses en EasyPanel/VPS — ahí el dominio
+# se enruta al puerto 80 del contenedor "web" desde la UI de EasyPanel, sin publicar
+# puertos en el compose (eso es justo lo que causaba los warnings).
+#
+# Uso local:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   abrir http://localhost:8084
+services:
+  web:
+    container_name: creditos-sm-perfumes
+    ports:
+      - "8084:80"
+
+  api:
+    container_name: creditos-sm-perfumes-api

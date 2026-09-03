@@ -312,7 +312,7 @@ a{ color: inherit; text-decoration: none; }
 .card-cat{
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   background: rgba(14,13,12,.78);
   color: var(--gold-soft);
   font-size: 9px;
@@ -370,6 +370,48 @@ a{ color: inherit; text-decoration: none; }
   color: #06210f;
 }
 .card-cta:hover svg{ color: #06210f; }
+
+/* ---------- Agotado (out of stock) ---------- */
+.card.is-agotado .card-media img{
+  filter: grayscale(65%);
+  opacity: .5;
+}
+.card.is-agotado:hover .card-media img{ transform: none; }
+.card.is-agotado .card-name,
+.card.is-agotado .card-note{ color: var(--cream-dim); }
+
+.ribbon-agotado{
+  position: absolute;
+  top: 22px;
+  left: -34px;
+  z-index: 2;
+  width: 150px;
+  padding: 5px 0;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--cream);
+  background: linear-gradient(135deg, #8a2c29, #5c1c1a);
+  border-top: 1px solid rgba(227,202,160,.35);
+  border-bottom: 1px solid rgba(227,202,160,.35);
+  transform: rotate(-38deg);
+  box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  pointer-events: none;
+}
+
+.card-cta-muted{
+  border-color: rgba(217,83,79,.35);
+  color: var(--cream-dim);
+}
+.card-cta-muted svg{ color: var(--cream-dim); }
+.card-cta-muted:hover{
+  background: rgba(217,83,79,.16);
+  border-color: rgba(217,83,79,.5);
+  color: var(--cream);
+}
+.card-cta-muted:hover svg{ color: var(--cream); }
 
 .empty-state{
   text-align: center;

@@ -5,3 +5,5 @@ logo creditos sm.png
 .git
 .DS_Store
 .gitignore
+.env
+.env.example

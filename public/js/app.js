@@ -22,9 +22,15 @@
   const lightboxClose = document.getElementById("lightboxClose");
 
   let state = { category: "todos", query: "" };
+  let stock = {}; // { [slug]: true } → agotado
 
   function waLink(product) {
     const msg = `Hola ${CONFIG.brand}, me interesa el perfume "${product.name}" (${product.brand}). ¿Me das más información?`;
+    return `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(msg)}`;
+  }
+
+  function waLinkAgotado(product) {
+    const msg = `Hola ${CONFIG.brand}, vi que "${product.name}" (${product.brand}) está agotado. ¿Sabes cuándo vuelve a estar disponible?`;
     return `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -33,19 +39,22 @@
   }
 
   function cardTemplate(p) {
+    const isOut = !!stock[p.slug];
     return `
-      <article class="card" data-slug="${p.slug}" data-category="${p.category}">
+      <article class="card ${isOut ? "is-agotado" : ""}" data-slug="${p.slug}" data-category="${p.category}">
         <div class="card-media">
           <span class="card-cat">${p.category === "hombre" ? "Hombre" : "Mujer"}</span>
+          ${isOut ? '<span class="ribbon-agotado">Agotado</span>' : ""}
           <img src="${p.img}" alt="${p.name} — ${p.brand}" loading="lazy" width="900" height="1125">
         </div>
         <div class="card-body">
           <span class="card-brand">${p.brand}</span>
           <h3 class="card-name">${p.name}</h3>
           <span class="card-note">${p.note}</span>
-          <a class="card-cta" href="${waLink(p)}" target="_blank" rel="noopener" aria-label="Consultar ${p.name} por WhatsApp">
-            ${waIcon()} Consultar
-          </a>
+          ${isOut
+            ? `<a class="card-cta card-cta-muted" href="${waLinkAgotado(p)}" target="_blank" rel="noopener" aria-label="Preguntar disponibilidad de ${p.name}">${waIcon()} Agotado · Preguntar</a>`
+            : `<a class="card-cta" href="${waLink(p)}" target="_blank" rel="noopener" aria-label="Consultar ${p.name} por WhatsApp">${waIcon()} Consultar</a>`
+          }
         </div>
       </article>`;
   }
@@ -156,4 +165,13 @@
   yearEl.textContent = new Date().getFullYear();
 
   applyFilters();
+
+  // Progressive enhancement: fetch sold-out state and re-render once it arrives.
+  fetch("/api/stock", { cache: "no-store" })
+    .then((res) => (res.ok ? res.json() : {}))
+    .then((data) => {
+      stock = data || {};
+      applyFilters();
+    })
+    .catch(() => {});
 })();

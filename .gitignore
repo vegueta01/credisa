@@ -3,9 +3,13 @@
 /mujer/
 /logo creditos sm.png
 
+# Secretos (token del panel de administración)
+.env
+
 # macOS
 .DS_Store
 
 # Editores
 .vscode/
 .idea/
+.env

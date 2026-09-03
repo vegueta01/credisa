@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel — Créditos S.A.</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --ink:#0e0d0c; --ink-soft:#171513; --panel:#1c1a17; --panel-line:rgba(212,175,105,.16);
+    --cream:#f7f2e9; --cream-dim:#cfc6b4; --gold:#c9a55c; --gold-soft:#e3caa0; --gold-deep:#9c7a3a;
+    --danger:#d9534f; --ok:#4caf6e;
+  }
+  *,*::before,*::after{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--ink); color:var(--cream);
+    font-family:'Helvetica Neue',Arial,sans-serif; font-weight:300;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:18px 16px; border-bottom:1px solid var(--panel-line);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    position:sticky; top:0; background:rgba(14,13,12,.9); backdrop-filter:blur(8px); z-index:10;
+  }
+  header h1{ font-size:15px; font-weight:500; margin:0; letter-spacing:.02em; }
+  header .sub{ font-size:11px; color:var(--cream-dim); margin-top:2px; }
+  .logout{
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--cream-dim);
+    background:transparent; border:1px solid var(--panel-line); border-radius:999px;
+    padding:7px 12px; cursor:pointer;
+  }
+  .logout:hover{ border-color:var(--gold); color:var(--gold-soft); }
+
+  main{ max-width:720px; margin:0 auto; padding:20px 16px 60px; }
+
+  .stat-bar{
+    display:flex; gap:16px; font-size:12px; color:var(--cream-dim);
+    margin-bottom:18px; letter-spacing:.03em;
+  }
+  .stat-bar strong{ color:var(--gold-soft); font-weight:500; }
+
+  .group-title{
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold);
+    margin:26px 0 10px;
+  }
+  .group-title:first-child{ margin-top:0; }
+
+  .row{
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid var(--panel-line); border-radius:4px;
+    padding:10px; margin-bottom:8px; transition:border-color .2s ease, opacity .2s ease;
+  }
+  .row.is-agotado{ border-color:rgba(217,83,79,.4); }
+  .row img{
+    width:46px; height:57px; object-fit:cover; border-radius:2px; background:#fff; flex:none;
+  }
+  .row-info{ flex:1; min-width:0; }
+  .row-brand{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); }
+  .row-name{ font-size:14px; color:var(--cream); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-status{ font-size:10.5px; margin-top:2px; }
+  .row-status.ok{ color:var(--ok); }
+  .row-status.agotado{ color:var(--danger); }
+
+  .switch{
+    position:relative; width:46px; height:26px; flex:none; cursor:pointer;
+  }
+  .switch input{ position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .switch .track{
+    position:absolute; inset:0; background:#3a352c; border-radius:999px; transition:background .2s ease;
+  }
+  .switch .thumb{
+    position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
+    background:var(--cream); transition:transform .2s ease;
+  }
+  .switch input:checked + .track{ background:var(--danger); }
+  .switch input:checked + .track + .thumb{ transform:translateX(20px); }
+  .switch input:disabled + .track{ opacity:.5; cursor:not-allowed; }
+
+  .toast{
+    position:fixed; left:50%; bottom:20px; transform:translate(-50%, 20px);
+    background:var(--panel); border:1px solid var(--panel-line); color:var(--cream);
+    padding:10px 16px; border-radius:999px; font-size:12.5px; opacity:0; pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease; z-index:50; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+  .toast.error{ border-color:rgba(217,83,79,.5); color:#ffb4b1; }
+
+  /* ---- Login gate ---- */
+  .gate{
+    position:fixed; inset:0; background:var(--ink); display:flex; align-items:center;
+    justify-content:center; padding:20px; z-index:100;
+  }
+  .gate.hidden{ display:none; }
+  .gate-card{ width:100%; max-width:320px; text-align:center; }
+  .gate-card h2{ font-size:16px; font-weight:500; margin:0 0 6px; }
+  .gate-card p{ font-size:12.5px; color:var(--cream-dim); margin:0 0 20px; }
+  .gate-card input{
+    width:100%; background:var(--panel); border:1px solid var(--panel-line); color:var(--cream);
+    padding:12px 14px; border-radius:4px; font-size:14px; outline:none; margin-bottom:12px;
+  }
+  .gate-card input:focus{ border-color:var(--gold); }
+  .gate-card button{
+    width:100%; padding:12px; border-radius:4px; border:none; cursor:pointer;
+    background:linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
+    color:#241a08; font-size:12.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:500;
+  }
+  .gate-error{ font-size:12px; color:#ffb4b1; margin-top:12px; min-height:16px; }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <h2>Panel — Créditos S.A.</h2>
+    <p>Ingresa el token de administración para continuar.</p>
+    <input type="password" id="gateInput" placeholder="Token" autocomplete="off">
+    <button id="gateBtn">Entrar</button>
+    <div class="gate-error" id="gateError"></div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>Inventario</h1>
+    <div class="sub">Marca un perfume como agotado para mostrarlo con marca de agua en el catálogo público.</div>
+  </div>
+  <button class="logout" id="logoutBtn">Salir</button>
+</header>
+
+<main>
+  <div class="stat-bar">
+    <span><strong id="statTotal">0</strong> perfumes</span>
+    <span><strong id="statAgotado">0</strong> agotados</span>
+  </div>
+  <div id="list"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="../js/catalog.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const TOKEN_KEY = "creditos_admin_token";
+  const gate = document.getElementById("gate");
+  const gateInput = document.getElementById("gateInput");
+  const gateBtn = document.getElementById("gateBtn");
+  const gateError = document.getElementById("gateError");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const list = document.getElementById("list");
+  const toast = document.getElementById("toast");
+  const statTotal = document.getElementById("statTotal");
+  const statAgotado = document.getElementById("statAgotado");
+
+  let stock = {};
+
+  function getToken(){ return localStorage.getItem(TOKEN_KEY) || ""; }
+  function setToken(t){ localStorage.setItem(TOKEN_KEY, t); }
+  function clearToken(){ localStorage.removeItem(TOKEN_KEY); }
+
+  function showToast(msg, isError){
+    toast.textContent = msg;
+    toast.classList.toggle("error", !!isError);
+    toast.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove("show"), 2400);
+  }
+
+  function openGate(msg){
+    gate.classList.remove("hidden");
+    gateError.textContent = msg || "";
+    gateInput.value = "";
+    gateInput.focus();
+  }
+  function closeGate(){ gate.classList.add("hidden"); }
+
+  async function fetchStock(){
+    const res = await fetch("/api/stock", { cache: "no-store" });
+    if (!res.ok) throw new Error("No se pudo cargar el inventario");
+    return res.json();
+  }
+
+  async function setAgotado(slug, agotado){
+    const res = await fetch("/api/stock", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + getToken(),
+      },
+      body: JSON.stringify({ slug, agotado }),
+    });
+    if (res.status === 401) {
+      clearToken();
+      throw Object.assign(new Error("unauthorized"), { unauthorized: true });
+    }
+    if (!res.ok) throw new Error("No se pudo guardar el cambio");
+    return res.json();
+  }
+
+  function updateStats(){
+    const total = PRODUCTS.length;
+    const agotados = Object.keys(stock).filter((k) => stock[k]).length;
+    statTotal.textContent = total;
+    statAgotado.textContent = agotados;
+  }
+
+  function renderList(){
+    const groups = [
+      { key: "hombre", label: "Hombre" },
+      { key: "mujer", label: "Mujer" },
+    ];
+    list.innerHTML = groups.map((g) => {
+      const items = PRODUCTS.filter((p) => p.category === g.key);
+      const rows = items.map((p) => {
+        const isOut = !!stock[p.slug];
+        return `
+          <div class="row ${isOut ? "is-agotado" : ""}" data-slug="${p.slug}">
+            <img src="../${p.img}" alt="" width="46" height="57">
+            <div class="row-info">
+              <div class="row-brand">${p.brand}</div>
+              <div class="row-name">${p.name}</div>
+              <div class="row-status ${isOut ? "agotado" : "ok"}">${isOut ? "Agotado" : "Disponible"}</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" ${isOut ? "checked" : ""} data-slug="${p.slug}">
+              <span class="track"></span>
+              <span class="thumb"></span>
+            </label>
+          </div>`;
+      }).join("");
+      return `<div class="group-title">${g.label}</div>${rows}`;
+    }).join("");
+
+    list.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.addEventListener("change", onToggle);
+    });
+    updateStats();
+  }
+
+  async function onToggle(e){
+    const input = e.target;
+    const slug = input.dataset.slug;
+    const agotado = input.checked;
+    const row = input.closest(".row");
+    input.disabled = true;
+    try {
+      stock = await setAgotado(slug, agotado);
+      row.classList.toggle("is-agotado", agotado);
+      const statusEl = row.querySelector(".row-status");
+      statusEl.textContent = agotado ? "Agotado" : "Disponible";
+      statusEl.className = "row-status " + (agotado ? "agotado" : "ok");
+      updateStats();
+      showToast(agotado ? "Marcado como agotado" : "Marcado como disponible");
+    } catch (err) {
+      input.checked = !agotado; // revert
+      if (err.unauthorized) {
+        openGate("Token inválido o expirado. Ingresa de nuevo.");
+      } else {
+        showToast(err.message || "Error al guardar", true);
+      }
+    } finally {
+      input.disabled = false;
+    }
+  }
+
+  async function init(){
+    try {
+      stock = await fetchStock();
+    } catch {
+      stock = {};
+    }
+    renderList();
+    if (getToken()) {
+      closeGate();
+    } else {
+      openGate();
+    }
+  }
+
+  gateBtn.addEventListener("click", () => {
+    const val = gateInput.value.trim();
+    if (!val) return;
+    setToken(val);
+    closeGate();
+  });
+  gateInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") gateBtn.click();
+  });
+  logoutBtn.addEventListener("click", () => {
+    clearToken();
+    openGate();
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>

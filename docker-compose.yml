@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    image: creditos-sm-perfumes:latest
+    container_name: creditos-sm-perfumes
+    restart: unless-stopped
+    ports:
+      - "8084:80"

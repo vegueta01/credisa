@@ -1,0 +1,11 @@
+# Fotos originales sin procesar (las versiones optimizadas ya viven en public/img/)
+/hombre/
+/mujer/
+/logo creditos sm.png
+
+# macOS
+.DS_Store
+
+# Editores
+.vscode/
+.idea/

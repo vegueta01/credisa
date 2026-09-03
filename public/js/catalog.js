@@ -1,4 +1,4 @@
-/* Catálogo de perfumes — Créditos S.M.
+/* Catálogo de perfumes — Créditos S.A.
    Para añadir un perfume nuevo: agrega un objeto al arreglo PRODUCTS
    con category "hombre" o "mujer" y una imagen en public/img/<category>/ */
 

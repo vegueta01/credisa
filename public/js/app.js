@@ -3,7 +3,7 @@
 
   const CONFIG = {
     whatsapp: "573016040565",
-    brand: "Créditos S.M.",
+    brand: "Créditos S.A.",
   };
 
   const grid = document.getElementById("grid");

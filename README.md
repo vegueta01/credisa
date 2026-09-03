@@ -1,4 +1,4 @@
-# Créditos S.M. — Catálogo de Perfumes
+# Créditos S.A. — Catálogo de Perfumes
 
 Sitio estático (HTML/CSS/JS, sin frameworks) mobile-first, dockerizado con Nginx.
 
@@ -70,4 +70,4 @@ El número de WhatsApp está centralizado en dos lugares (mantenerlos iguales si
 - Paleta: negro/carbón + hueso + dorado, tipografía serif (Cormorant Garamond) para títulos y Jost para el resto — estética de perfumería de lujo.
 - Mobile-first: grid de 2 columnas en móvil, hasta 5 en escritorio.
 - Sin precios (por decisión del negocio): cada tarjeta tiene un botón "Consultar" que abre WhatsApp con un mensaje prellenado con el nombre del perfume.
-- El logo actual es el de "Surti Muebles S.M." — si más adelante tienes el logo correcto de Créditos S.M., reemplaza `public/img/brand/logo.png` (mismo nombre de archivo) y vuelve a desplegar.
+- El logo actual es el de "Surti Muebles S.M." — si más adelante tienes el logo correcto de Créditos S.A., reemplaza `public/img/brand/logo.png` (mismo nombre de archivo) y vuelve a desplegar.

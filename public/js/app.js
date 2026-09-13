@@ -14,6 +14,7 @@
   const yearEl = document.getElementById("year");
 
   const lightbox = document.getElementById("lightbox");
+  const lightboxInner = lightbox.querySelector(".lightbox-inner");
   const lightboxMedia = document.getElementById("lightboxMedia");
   const lightboxBrand = document.getElementById("lightboxBrand");
   const lightboxName = document.getElementById("lightboxName");
@@ -123,6 +124,7 @@
     lightboxName.textContent = p.name;
     lightboxNote.textContent = p.note;
     lightboxWa.href = waLink(p);
+    resetDrag();
     lightbox.classList.add("open");
     document.body.style.overflow = "hidden";
   }
@@ -130,6 +132,7 @@
   function closeLightbox() {
     lightbox.classList.remove("open");
     document.body.style.overflow = "";
+    resetDrag();
   }
 
   lightboxClose.addEventListener("click", closeLightbox);
@@ -138,6 +141,50 @@
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeLightbox();
+  });
+
+  // Arrastrar hacia abajo para cerrar (solo gestos táctiles; en desktop
+  // ya es intuitivo cerrar tocando fuera de la tarjeta).
+  const DRAG_CLOSE_THRESHOLD = 110;
+  let dragStartY = 0;
+  let dragDeltaY = 0;
+  let isDragging = false;
+
+  function resetDrag() {
+    isDragging = false;
+    dragDeltaY = 0;
+    lightboxInner.classList.remove("dragging");
+    lightboxInner.style.transform = "";
+    lightboxInner.style.opacity = "";
+  }
+
+  lightboxInner.addEventListener("touchstart", (e) => {
+    if (e.target.closest("a, button")) return; // no interferir con el botón de WhatsApp
+    isDragging = true;
+    dragStartY = e.touches[0].clientY;
+    dragDeltaY = 0;
+    lightboxInner.classList.add("dragging");
+  }, { passive: true });
+
+  lightboxInner.addEventListener("touchmove", (e) => {
+    if (!isDragging) return;
+    dragDeltaY = e.touches[0].clientY - dragStartY;
+    if (dragDeltaY <= 0) return; // solo se arrastra hacia abajo
+    e.preventDefault();
+    lightboxInner.style.transform = `translateY(${dragDeltaY}px)`;
+    lightboxInner.style.opacity = String(Math.max(1 - dragDeltaY / 400, 0.4));
+  }, { passive: false });
+
+  lightboxInner.addEventListener("touchend", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    lightboxInner.classList.remove("dragging");
+    if (dragDeltaY > DRAG_CLOSE_THRESHOLD) {
+      closeLightbox();
+    } else {
+      lightboxInner.style.transform = "";
+      lightboxInner.style.opacity = "";
+    }
   });
 
   // Reveal-on-scroll for generic sections

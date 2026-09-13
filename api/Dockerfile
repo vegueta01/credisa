@@ -1,7 +1,10 @@
-# Minúsculo API sin dependencias — solo Node built-ins (http, fs)
+# API con una sola dependencia (busboy, para subir fotos desde el panel)
 FROM node:20-alpine
 
 WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev
+
 COPY server.js .
 
 ENV PORT=3001

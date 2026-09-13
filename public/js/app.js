@@ -3,7 +3,7 @@
 
   const CONFIG = {
     whatsapp: "573016040565",
-    brand: "Créditos S.A.",
+    brand: "Variedades Adrian",
   };
 
   const grid = document.getElementById("grid");
@@ -22,7 +22,7 @@
   const lightboxClose = document.getElementById("lightboxClose");
 
   let state = { category: "todos", query: "" };
-  let stock = {}; // { [slug]: true } → agotado
+  let PRODUCTS = []; // se llena desde /api/products al cargar
 
   function waLink(product) {
     const msg = `Hola ${CONFIG.brand}, me interesa el perfume "${product.name}" (${product.brand}). ¿Me das más información?`;
@@ -39,7 +39,7 @@
   }
 
   function cardTemplate(p) {
-    const isOut = !!stock[p.slug];
+    const isOut = !!p.agotado;
     return `
       <article class="card ${isOut ? "is-agotado" : ""}" data-slug="${p.slug}" data-category="${p.category}">
         <div class="card-media">
@@ -164,14 +164,15 @@
 
   yearEl.textContent = new Date().getFullYear();
 
-  applyFilters();
+  async function init() {
+    try {
+      const res = await fetch("/api/products", { cache: "no-store" });
+      PRODUCTS = res.ok ? await res.json() : [];
+    } catch {
+      PRODUCTS = [];
+    }
+    applyFilters();
+  }
 
-  // Progressive enhancement: fetch sold-out state and re-render once it arrives.
-  fetch("/api/stock", { cache: "no-store" })
-    .then((res) => (res.ok ? res.json() : {}))
-    .then((data) => {
-      stock = data || {};
-      applyFilters();
-    })
-    .catch(() => {});
+  init();
 })();

@@ -219,7 +219,14 @@
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
     scheduleHint();
+    // Deja una entrada en el historial: si el gesto nativo de "volver atrás"
+    // del celular (deslizar desde el borde) llega a activarse por error
+    // mientras el visor está abierto, esto hace que solo cierre el visor
+    // en vez de sacar al usuario de todo el catálogo.
+    history.pushState({ lightboxOpen: true }, "", location.href);
   }
+
+  let closingViaPopstate = false;
 
   function closeLightbox() {
     lightbox.classList.remove("open");
@@ -227,7 +234,21 @@
     document.body.style.overscrollBehavior = "";
     resetDrag();
     cancelHint();
+    // Si esto se cerró tocando la X, deslizando hacia abajo, etc. (no por el
+    // gesto de "atrás"), hay que quitar la entrada de historial que abrimos
+    // en openLightbox para no dejarla pendiente ahí.
+    if (!closingViaPopstate && history.state && history.state.lightboxOpen) {
+      history.back();
+    }
+    closingViaPopstate = false;
   }
+
+  window.addEventListener("popstate", () => {
+    if (lightbox.classList.contains("open")) {
+      closingViaPopstate = true;
+      closeLightbox();
+    }
+  });
 
   const SLIDE_MS = 180;
 
@@ -303,7 +324,15 @@
   }
 
   lightboxInner.addEventListener("touchstart", (e) => {
-    if (e.target.closest("a, button")) return; // no interferir con el botón de WhatsApp
+    if (e.target.closest("a, button, .lightbox-close")) return; // no interferir con WhatsApp ni con el botón de cerrar (queda encima de la foto en mobile)
+    // preventDefault aquí (con passive:false) es lo que evita que iOS Safari
+    // interprete un toque cerca del borde físico de la pantalla como el
+    // gesto nativo de "volver atrás" (edge-swipe). Ese gesto vive fuera de
+    // nuestra lógica de toques — si no lo cancelamos apenas empieza el
+    // toque, iOS ya se adueñó de él antes de que midamos ningún movimiento,
+    // y por eso un simple tap en los bordes se sentía como si "cerrara" el
+    // modal (en realidad disparaba popstate).
+    e.preventDefault();
     cancelHint(); // el usuario ya está interactuando, no hace falta seguir mostrando la pista
     touchActive = true;
     axis = null;
@@ -311,7 +340,7 @@
     startY = e.touches[0].clientY;
     dragDeltaX = 0;
     dragDeltaY = 0;
-  }, { passive: true });
+  }, { passive: false });
 
   lightboxInner.addEventListener("touchmove", (e) => {
     if (!touchActive) return;

@@ -100,3 +100,4 @@ El número de WhatsApp está centralizado en dos lugares (mantenerlos iguales si
 - Mobile-first: grid de 2 columnas en móvil, hasta 5 en escritorio.
 - Sin precios en la web pública (por decisión del negocio): cada tarjeta tiene un botón "Consultar" que abre WhatsApp con un mensaje prellenado con el nombre del perfume. Los precios sí existen internamente (compra/contado/crédito) para llevar el inventario y las ventas desde el panel.
 - El logo actual es el de "Surti Muebles S.M." — si más adelante tienes el logo correcto de Variedades Adrian, reemplaza `public/img/brand/logo.png` (mismo nombre de archivo) y vuelve a desplegar.
+- **`js/app.js` y `css/styles.css` se cargan con `?v=N`** (ver `index.html`) porque Nginx los cachea 7 días (`nginx.conf`). Cada vez que edites alguno de esos dos archivos, sube ese número (`?v=4`, `?v=5`, ...) — si no, los navegadores (sobre todo celulares) pueden seguir usando la versión vieja aunque ya hayas desplegado la corrección.

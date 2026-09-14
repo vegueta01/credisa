@@ -217,12 +217,14 @@
     resetDrag();
     lightbox.classList.add("open");
     document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
     scheduleHint();
   }
 
   function closeLightbox() {
     lightbox.classList.remove("open");
     document.body.style.overflow = "";
+    document.body.style.overscrollBehavior = "";
     resetDrag();
     cancelHint();
   }
@@ -279,7 +281,12 @@
   // tocar el lateral izquierdo/derecho de la foto avanza o retrocede.
   const CLOSE_THRESHOLD = 110;
   const SWIPE_THRESHOLD = 70;
-  const TAP_SLOP = 10; // movimiento máximo para seguir considerándose un "toque"
+  // 18px en vez de un valor más chico: en celulares reales un "toque" casi
+  // siempre trae algo de movimiento (el navegador puede rebotar un poco la
+  // página, el dedo no queda perfectamente quieto), y con un margen muy
+  // ajustado eso se confundía con un arrastre y cerraba el modal solo. En
+  // el emulador de escritorio ese ruido no existe, por eso allá no se notaba.
+  const TAP_SLOP = 18;
   let startX = 0, startY = 0, dragDeltaX = 0, dragDeltaY = 0;
   let axis = null; // "x" | "y" | null (aún sin decidir)
   let touchActive = false;
@@ -332,13 +339,18 @@
     }
   }, { passive: false });
 
-  lightboxInner.addEventListener("touchend", () => {
+  function onTouchEnd() {
     if (!touchActive) return;
     touchActive = false;
     lightboxInner.classList.remove("dragging");
 
+    // Que baje más del umbral no basta: también debe ser un arrastre
+    // claramente vertical (no diagonal ni ruido), para no cerrar con el
+    // mini-rebote que algunos navegadores móviles hacen ante un simple toque.
+    const isDeliberateCloseDrag = dragDeltaY > CLOSE_THRESHOLD && dragDeltaY > Math.abs(dragDeltaX) * 1.5;
+
     if (axis === "y") {
-      if (dragDeltaY > CLOSE_THRESHOLD) {
+      if (isDeliberateCloseDrag) {
         closeLightbox();
       } else {
         snapBack();
@@ -361,7 +373,19 @@
         else showNext();
       }
     }
-  });
+  }
+
+  function onTouchCancel() {
+    // El sistema operativo interrumpió el gesto (p. ej. un gesto propio del
+    // navegador que se adueñó del toque) — no hay que honrar ese arrastre a
+    // medias, solo dejar la tarjeta como estaba.
+    if (!touchActive) return;
+    touchActive = false;
+    snapBack();
+  }
+
+  lightboxInner.addEventListener("touchend", onTouchEnd);
+  lightboxInner.addEventListener("touchcancel", onTouchCancel);
 
   // Reveal-on-scroll for generic sections
   const io = new IntersectionObserver(

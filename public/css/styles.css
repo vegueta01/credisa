@@ -565,6 +565,7 @@ a{ color: inherit; text-decoration: none; }
   justify-content: center;
   padding: 24px;
   backdrop-filter: blur(4px);
+  overscroll-behavior: none; /* evita el "rebote" de la página en móvil, que se leía como un arrastre vertical */
 }
 .lightbox.open{ display: flex; }
 .lightbox-inner{

@@ -133,6 +133,8 @@
     flex:1; background:var(--ink-soft); border:1px solid var(--panel-line); color:var(--cream);
     padding:10px 12px; border-radius:4px; font-size:16px; outline:none;
   }
+  .crow-actions{ margin-top:10px; padding-top:10px; border-top:1px solid var(--panel-line); }
+  .crow-actions .btn-undo{ width:100%; }
   .empty-hint{ font-size:15px; color:var(--cream-dim); padding:22px 0; text-align:center; }
 
   /* ---- Cierre ---- */
@@ -262,7 +264,7 @@
 
 <div class="tabbar">
   <button class="tab-btn active" data-tab="inventario">Inventario</button>
-  <button class="tab-btn" data-tab="creditos">Créditos</button>
+  <button class="tab-btn" data-tab="creditos">Ventas</button>
   <button class="tab-btn" data-tab="cierre">Cierre</button>
   <button class="tab-btn" data-tab="agregar">Agregar</button>
 </div>
@@ -289,10 +291,10 @@
     <div id="invList"></div>
   </section>
 
-  <!-- ============ CRÉDITOS PENDIENTES ============ -->
+  <!-- ============ VENTAS ============ -->
   <section class="tab-panel" id="tab-creditos">
-    <h2 class="section-title">Créditos pendientes de cobro</h2>
-    <p class="section-sub">Registra cada abono que te paguen. Cuando el saldo llega a 0, la venta queda completamente pagada.</p>
+    <h2 class="section-title">Ventas registradas</h2>
+    <p class="section-sub">Registra cada abono que te paguen a crédito (el saldo llega a 0 cuando queda pagada por completo). Si una venta quedó mal registrada, puedes deshacerla mientras no haya entrado todavía en un cierre.</p>
     <div id="creditList"></div>
   </section>
 
@@ -362,8 +364,8 @@
     <label class="field"><span>Cantidad</span><input type="number" id="sellQty" value="1" min="1"></label>
 
     <div class="seg" id="sellTypeSeg">
-      <button type="button" data-type="contado" class="active">Contado</button>
-      <button type="button" data-type="credito">Crédito</button>
+      <button type="button" data-type="credito" class="active">Crédito</button>
+      <button type="button" data-type="contado">Contado</button>
     </div>
 
     <label class="field"><span>Precio sugerido</span><input type="number" id="sellSuggested"></label>
@@ -495,7 +497,7 @@
     btn.addEventListener("click", () => {
       $$(".tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
       $$(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + btn.dataset.tab));
-      if (btn.dataset.tab === "creditos") loadCredits();
+      if (btn.dataset.tab === "creditos") loadSales();
       if (btn.dataset.tab === "cierre") loadClosings();
     });
   });
@@ -633,7 +635,7 @@
     $("#sellQty").max = p.stock;
     $("#sellBuyer").value = "";
     $("#sellInitialPayment").value = 0;
-    setSellType("contado", p);
+    setSellType("credito", p);
     sellModal.classList.remove("hidden");
   }
 
@@ -685,42 +687,52 @@
     }
   });
 
-  // ---------------------------------------------------------------- Créditos pendientes
-  async function loadCredits(){
+  // ---------------------------------------------------------------- Ventas
+  async function loadSales(){
     const list = $("#creditList");
     let sales;
     try {
-      sales = await api("/api/admin/sales?pending=true");
+      sales = await api("/api/admin/sales");
     } catch (err) {
       if (err.unauthorized) return;
       list.innerHTML = `<div class="empty-hint">${err.message}</div>`;
       return;
     }
     if (!sales.length) {
-      list.innerHTML = `<div class="empty-hint">No hay créditos pendientes por cobrar.</div>`;
+      list.innerHTML = `<div class="empty-hint">Aún no hay ventas registradas.</div>`;
       return;
     }
-    list.innerHTML = sales.map((s) => `
+    list.innerHTML = sales.map((s) => {
+      const pending = s.paymentType === "credito" && !s.fullyPaid;
+      const statusText = s.fullyPaid ? "Pagada" : `Pendiente: ${money(s.balance)} de ${money(s.total)}`;
+      return `
       <div class="crow" data-id="${s.id}">
         <div class="crow-top">
           <div>
             <div class="crow-buyer">${s.buyerName}</div>
-            <div class="crow-product">${s.brand} — ${s.productName} · x${s.quantity} · ${new Date(s.createdAt).toLocaleDateString("es-CO")}</div>
+            <div class="crow-product">${s.brand} — ${s.productName} · x${s.quantity} · ${s.paymentType === "credito" ? "Crédito" : "Contado"} · ${new Date(s.createdAt).toLocaleDateString("es-CO")}</div>
           </div>
           <div class="crow-money">
-            <strong>${money(s.balance)}</strong>
-            saldo de ${money(s.total)} (pagado ${money(s.amountPaid)})
+            <strong>${money(s.total)}</strong>
+            ${statusText}
           </div>
         </div>
+        ${pending ? `
         <div class="crow-abono">
           <input type="number" min="1" max="${s.balance}" placeholder="Monto del abono" class="abono-input">
           <button class="btn-mini gold abono-btn">Registrar abono</button>
+        </div>` : ""}
+        <div class="crow-actions">
+          <button class="btn-mini danger btn-undo" ${s.canUndo ? "" : `disabled title="Ya fue incluida en un cierre, no se puede deshacer"`}>Deshacer venta</button>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
 
     $$(".crow", list).forEach((row) => {
       const id = row.dataset.id;
-      row.querySelector(".abono-btn").addEventListener("click", () => registerPayment(id, row));
+      const abonoBtn = row.querySelector(".abono-btn");
+      if (abonoBtn) abonoBtn.addEventListener("click", () => registerPayment(id, row));
+      row.querySelector(".btn-undo").addEventListener("click", () => undoSale(id, row));
     });
   }
 
@@ -736,10 +748,24 @@
         body: JSON.stringify({ amount }),
       });
       showToast("Abono registrado");
-      await loadCredits();
+      await loadSales();
     } catch (err) {
       if (!err.unauthorized) showToast(err.message, true);
     } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function undoSale(saleId, row){
+    if (!confirm("¿Deshacer esta venta? Se devuelve el stock y se borra el registro. No se puede revertir.")) return;
+    const btn = row.querySelector(".btn-undo");
+    btn.disabled = true;
+    try {
+      await api(`/api/admin/sales/${encodeURIComponent(saleId)}`, { method: "DELETE" });
+      showToast("Venta deshecha");
+      await Promise.all([loadSales(), loadProducts()]);
+    } catch (err) {
+      if (!err.unauthorized) showToast(err.message, true);
       btn.disabled = false;
     }
   }

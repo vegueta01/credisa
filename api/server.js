@@ -473,15 +473,51 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/admin/sales" && method === "GET") {
       if (!requireAdmin()) return;
       const sales = readJSON(FILES.sales, []);
+      const payments = readJSON(FILES.payments, []);
       const pendingOnly = url.searchParams.get("pending") === "true";
       let list = sales;
       if (pendingOnly) {
         list = sales.filter((s) => s.paymentType === "credito" && !s.fullyPaid);
       }
       list = list
-        .map((s) => ({ ...s, balance: s.total - s.amountPaid }))
+        .map((s) => {
+          // Solo se puede deshacer una venta mientras ninguno de sus pagos
+          // haya sido entregado ya en un cierre (si no, se descuadra la caja).
+          const hasClosedPayments = payments.some((p) => p.saleId === s.id && p.closingId != null);
+          return { ...s, balance: s.total - s.amountPaid, canUndo: !hasClosedPayments };
+        })
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       return sendJSON(res, 200, list);
+    }
+
+    // -------------------- DELETE /api/admin/sales/:id (deshacer venta) --------------------
+    const saleIdMatch = pathname.match(/^\/api\/admin\/sales\/([^/]+)$/);
+    if (saleIdMatch && method === "DELETE") {
+      if (!requireAdmin()) return;
+      const saleId = decodeURIComponent(saleIdMatch[1]);
+      const sales = readJSON(FILES.sales, []);
+      const sIdx = sales.findIndex((s) => s.id === saleId);
+      if (sIdx === -1) return sendJSON(res, 404, { error: "venta no encontrada" });
+      const sale = sales[sIdx];
+
+      const payments = readJSON(FILES.payments, []);
+      const salePayments = payments.filter((p) => p.saleId === sale.id);
+      if (salePayments.some((p) => p.closingId != null)) {
+        return sendJSON(res, 400, { error: "esta venta ya fue incluida en un cierre, no se puede deshacer" });
+      }
+
+      const products = readJSON(FILES.products, []);
+      const pIdx = products.findIndex((p) => p.slug === sale.slug);
+      if (pIdx !== -1) {
+        products[pIdx] = { ...products[pIdx], stock: products[pIdx].stock + sale.quantity, updatedAt: new Date().toISOString() };
+        writeJSON(FILES.products, products);
+      }
+
+      sales.splice(sIdx, 1);
+      writeJSON(FILES.sales, sales);
+      writeJSON(FILES.payments, payments.filter((p) => p.saleId !== sale.id));
+
+      return sendJSON(res, 200, { ok: true });
     }
 
     // -------------------- POST /api/admin/sales/:id/payments --------------------

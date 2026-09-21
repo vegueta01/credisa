@@ -510,7 +510,11 @@
     const list = $("#invList");
     const active = PRODUCTS.filter((p) => !p.archived);
     const q = normalize(invQuery.trim());
-    const filtered = q ? active.filter((p) => normalize(p.name).includes(q) || normalize(p.brand).includes(q)) : active;
+    const filtered = active.filter((p) => {
+      if (invCategory !== "all" && p.category !== invCategory) return false;
+      if (q && !(normalize(p.name).includes(q) || normalize(p.brand).includes(q))) return false;
+      return true;
+    });
     const groups = [{ key: "hombre", label: "Hombre" }, { key: "mujer", label: "Mujer" }];
     const groupsHtml = groups.map((g) => {
       const items = filtered.filter((p) => p.category === g.key);
@@ -518,7 +522,7 @@
       const rows = items.map(rowTemplate).join("");
       return `<div class="group-title">${g.label}</div>${rows}`;
     }).join("");
-    list.innerHTML = groupsHtml || `<div class="empty-hint">No hay perfumes que coincidan con "${invQuery}".</div>`;
+    list.innerHTML = groupsHtml || `<div class="empty-hint">No hay perfumes que coincidan con los filtros.</div>`;
 
     $$(".prow", list).forEach((row) => {
       const slug = row.dataset.slug;
@@ -530,9 +534,9 @@
       if (archiveBtn) archiveBtn.addEventListener("click", () => archiveProduct(slug));
     });
 
-    $("#statTotal").textContent = active.length;
-    $("#statStock").textContent = active.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-    $("#statAgotado").textContent = active.filter((p) => p.stock <= 0).length;
+    $("#statTotal").textContent = filtered.length;
+    $("#statStock").textContent = filtered.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
+    $("#statAgotado").textContent = filtered.filter((p) => p.stock <= 0).length;
   }
 
   function rowTemplate(p){
@@ -605,6 +609,14 @@
     invSearchBox.classList.remove("has-value");
     renderInventory();
     invSearch.focus();
+  });
+
+  $$("#invCategorySeg button").forEach((b) => {
+    b.addEventListener("click", () => {
+      invCategory = b.dataset.cat;
+      $$("#invCategorySeg button").forEach((x) => x.classList.toggle("active", x === b));
+      renderInventory();
+    });
   });
 
   // ---------------------------------------------------------------- Vender (modal)

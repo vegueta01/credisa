@@ -12,6 +12,7 @@ services:
     restart: unless-stopped
     environment:
       ADMIN_TOKEN: ${ADMIN_TOKEN:?Define ADMIN_TOKEN in .env (ver .env.example)}
+      SELLER_TOKEN: ${SELLER_TOKEN:-}
     volumes:
       - stock-data:/data
 

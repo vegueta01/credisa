@@ -6,6 +6,7 @@ const Busboy = require("busboy");
 
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+const SELLER_TOKEN = process.env.SELLER_TOKEN || "";
 const PORT = process.env.PORT || 3001;
 const MAX_JSON_BODY_BYTES = 2e5;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8MB
@@ -14,6 +15,9 @@ const COMMISSION_RATE = 0.5; // 50% de la ganancia para el vendedor
 if (!ADMIN_TOKEN) {
   console.error("ADMIN_TOKEN env var is required");
   process.exit(1);
+}
+if (!SELLER_TOKEN) {
+  console.warn("SELLER_TOKEN no está definido — el panel de vendedor (solo vender) quedará deshabilitado hasta que se configure.");
 }
 
 const FILES = {
@@ -160,10 +164,14 @@ function sendJSON(res, status, obj) {
   res.end(body);
 }
 
-function isAuthorized(req) {
+// "admin" ve y edita todo; "seller" (token separado) solo puede listar
+// productos (sin precio de compra) y registrar ventas — nada más.
+function roleForRequest(req) {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  return token === ADMIN_TOKEN;
+  if (token && token === ADMIN_TOKEN) return "admin";
+  if (token && SELLER_TOKEN && token === SELLER_TOKEN) return "seller";
+  return null;
 }
 
 function readJSONBody(req) {
@@ -278,22 +286,43 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, products.filter((p) => !p.archived).map(publicProduct));
     }
 
-    // A partir de aquí, todo requiere token de administrador.
+    // A partir de aquí, todo requiere token (de administrador o de vendedor).
+    let role = null;
     if (pathname.startsWith("/api/admin/")) {
-      if (!isAuthorized(req)) return sendJSON(res, 401, { error: "unauthorized" });
+      role = roleForRequest(req);
+      if (!role) return sendJSON(res, 401, { error: "unauthorized" });
     } else if (pathname.startsWith("/api/")) {
       return sendJSON(res, 404, { error: "not found" });
     } else {
       return sendJSON(res, 404, { error: "not found" });
     }
+    const requireAdmin = () => {
+      if (role !== "admin") {
+        sendJSON(res, 403, { error: "solo el administrador puede hacer esto" });
+        return false;
+      }
+      return true;
+    };
+
+    // -------------------- GET /api/admin/whoami --------------------
+    if (pathname === "/api/admin/whoami" && method === "GET") {
+      return sendJSON(res, 200, { role });
+    }
 
     // -------------------- GET /api/admin/products --------------------
     if (pathname === "/api/admin/products" && method === "GET") {
-      return sendJSON(res, 200, readJSON(FILES.products, []));
+      const products = readJSON(FILES.products, []);
+      if (role === "seller") {
+        // El vendedor necesita ver stock y precios de venta para vender,
+        // pero no el precio de compra (margen del negocio).
+        return sendJSON(res, 200, products.map(({ costPrice, ...rest }) => rest));
+      }
+      return sendJSON(res, 200, products);
     }
 
     // -------------------- POST /api/admin/products (multipart) --------------------
     if (pathname === "/api/admin/products" && method === "POST") {
+      if (!requireAdmin()) return;
       const { fields, file } = await parseMultipart(req);
       const name = (fields.name || "").trim();
       const brand = (fields.brand || "").trim();
@@ -340,6 +369,7 @@ const server = http.createServer(async (req, res) => {
     // -------------------- PATCH /api/admin/products/:slug --------------------
     const productMatch = pathname.match(/^\/api\/admin\/products\/([^/]+)$/);
     if (productMatch && method === "PATCH") {
+      if (!requireAdmin()) return;
       const slug = decodeURIComponent(productMatch[1]);
       const body = await readJSONBody(req);
       const products = readJSON(FILES.products, []);
@@ -365,6 +395,7 @@ const server = http.createServer(async (req, res) => {
 
     // -------------------- DELETE /api/admin/products/:slug (archivar) --------------------
     if (productMatch && method === "DELETE") {
+      if (!requireAdmin()) return;
       const slug = decodeURIComponent(productMatch[1]);
       const products = readJSON(FILES.products, []);
       const idx = products.findIndex((p) => p.slug === slug);
@@ -440,6 +471,7 @@ const server = http.createServer(async (req, res) => {
 
     // -------------------- GET /api/admin/sales --------------------
     if (pathname === "/api/admin/sales" && method === "GET") {
+      if (!requireAdmin()) return;
       const sales = readJSON(FILES.sales, []);
       const pendingOnly = url.searchParams.get("pending") === "true";
       let list = sales;
@@ -455,6 +487,7 @@ const server = http.createServer(async (req, res) => {
     // -------------------- POST /api/admin/sales/:id/payments --------------------
     const paymentMatch = pathname.match(/^\/api\/admin\/sales\/([^/]+)\/payments$/);
     if (paymentMatch && method === "POST") {
+      if (!requireAdmin()) return;
       const saleId = decodeURIComponent(paymentMatch[1]);
       const body = await readJSONBody(req);
       const amount = toMoney(body.amount, NaN);
@@ -486,6 +519,7 @@ const server = http.createServer(async (req, res) => {
 
     // -------------------- POST /api/admin/closings --------------------
     if (pathname === "/api/admin/closings" && method === "POST") {
+      if (!requireAdmin()) return;
       const payments = readJSON(FILES.payments, []);
       const pendingPayments = payments.filter((p) => p.closingId == null);
       if (pendingPayments.length === 0) {
@@ -532,12 +566,14 @@ const server = http.createServer(async (req, res) => {
 
     // -------------------- GET /api/admin/closings --------------------
     if (pathname === "/api/admin/closings" && method === "GET") {
+      if (!requireAdmin()) return;
       const closings = readJSON(FILES.closings, []).sort((a, b) => (a.date < b.date ? 1 : -1));
       return sendJSON(res, 200, closings);
     }
 
     // -------------------- vista previa de cierre (sin ejecutar) --------------------
     if (pathname === "/api/admin/closings/preview" && method === "GET") {
+      if (!requireAdmin()) return;
       const payments = readJSON(FILES.payments, []);
       const pendingPayments = payments.filter((p) => p.closingId == null);
       const cashCollected = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -560,9 +596,11 @@ const server = http.createServer(async (req, res) => {
 
     // -------------------- config (nombres vendedor/inversionista) --------------------
     if (pathname === "/api/admin/config" && method === "GET") {
+      if (!requireAdmin()) return;
       return sendJSON(res, 200, readJSON(FILES.config, { sellerName: "Vendedor", investorName: "Inversionista" }));
     }
     if (pathname === "/api/admin/config" && method === "PATCH") {
+      if (!requireAdmin()) return;
       const body = await readJSONBody(req);
       const current = readJSON(FILES.config, { sellerName: "Vendedor", investorName: "Inversionista" });
       const next = {

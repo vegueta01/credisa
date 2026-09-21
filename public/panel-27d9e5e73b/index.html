@@ -48,6 +48,12 @@
   .tab-panel{ display:none; padding-top:18px; }
   .tab-panel.active{ display:block; }
 
+  /* El vendedor solo ve Inventario (con el botón Vender) */
+  body.role-seller .tab-btn:not([data-tab="inventario"]){ display:none; }
+  body.role-seller .prow-price-mini{ display:flex; }
+  .prow-price-mini{ display:none; gap:12px; flex-wrap:wrap; font-size:13.5px; color:var(--cream-dim); margin-top:6px; }
+  .prow-price-mini strong{ color:var(--gold-soft); font-weight:500; }
+
   h2.section-title{ font-size:17px; font-weight:500; letter-spacing:.03em; color:var(--gold-soft); margin:0 0 6px; }
   p.section-sub{ font-size:14.5px; color:var(--cream-dim); margin:0 0 16px; line-height:1.5; }
 
@@ -268,11 +274,17 @@
     <p class="section-sub">Cantidad, precios y estado de cada perfume. "Agotado" se muestra en la web pública apenas el stock llega a 0.</p>
     <div class="stat-bar">
       <span><strong id="statTotal">0</strong> perfumes</span>
+      <span><strong id="statStock">0</strong> unidades en stock</span>
       <span><strong id="statAgotado">0</strong> agotados</span>
     </div>
     <div class="search-box" id="invSearchBox">
       <input type="text" id="invSearch" placeholder="Buscar por nombre o marca..." autocomplete="off">
       <button type="button" class="search-clear" id="invSearchClear" aria-label="Limpiar búsqueda">✕</button>
+    </div>
+    <div class="seg" id="invCategorySeg" style="margin-bottom:16px;">
+      <button type="button" data-cat="all" class="active">Todos</button>
+      <button type="button" data-cat="hombre">Hombre</button>
+      <button type="button" data-cat="mujer">Mujer</button>
     </div>
     <div id="invList"></div>
   </section>
@@ -392,6 +404,8 @@
 
   let PRODUCTS = [];
   let invQuery = "";
+  let invCategory = "all"; // "all" | "hombre" | "mujer"
+  let ROLE = null; // "admin" | "seller"
 
   function normalize(s){
     return (s || "").toString().normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -457,6 +471,25 @@
     return data;
   }
 
+  // ---------------------------------------------------------------- Rol (admin vs. vendedor)
+  async function fetchRole(){
+    const data = await api("/api/admin/whoami");
+    ROLE = data.role;
+  }
+
+  function applyRoleUI(){
+    const isSeller = ROLE === "seller";
+    document.body.classList.toggle("role-seller", isSeller);
+    $("h1", document.querySelector("header")).textContent = isSeller
+      ? "Panel Vendedor — Variedades Adrian"
+      : "Panel — Variedades Adrian";
+    if (isSeller) {
+      // El vendedor solo tiene la pestaña de Inventario (con el botón Vender).
+      $$(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "inventario"));
+      $$(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-inventario"));
+    }
+  }
+
   // ---------------------------------------------------------------- Tabs
   $$(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -493,15 +526,18 @@
         input.addEventListener("change", () => onFieldChange(slug, input));
       });
       $(".btn-sell", row).addEventListener("click", () => openSellModal(slug));
-      $(".btn-archive", row).addEventListener("click", () => archiveProduct(slug));
+      const archiveBtn = $(".btn-archive", row);
+      if (archiveBtn) archiveBtn.addEventListener("click", () => archiveProduct(slug));
     });
 
     $("#statTotal").textContent = active.length;
+    $("#statStock").textContent = active.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
     $("#statAgotado").textContent = active.filter((p) => p.stock <= 0).length;
   }
 
   function rowTemplate(p){
     const isOut = p.stock <= 0;
+    const isSeller = ROLE === "seller";
     return `
       <div class="prow" data-slug="${p.slug}">
         <img src="${p.img}" alt="">
@@ -509,16 +545,18 @@
           <div class="prow-brand">${p.brand}</div>
           <div class="prow-name">${p.name}</div>
           <span class="prow-status ${isOut ? "agotado" : "ok"}">${isOut ? "Agotado" : "Disponible"}</span>
+          <div class="prow-price-mini"><span>Stock: <strong>${p.stock}</strong></span><span>Contado: <strong>${money(p.cashPrice)}</strong></span><span>Crédito: <strong>${money(p.creditPrice)}</strong></span></div>
         </div>
+        ${isSeller ? "" : `
         <div class="prow-fields">
           <label class="field"><span>Stock</span><input class="f-field" data-key="stock" type="number" min="0" value="${p.stock}"></label>
           <label class="field"><span>Compra</span><input class="f-field" data-key="costPrice" type="number" min="0" value="${p.costPrice}"></label>
           <label class="field"><span>Contado</span><input class="f-field" data-key="cashPrice" type="number" min="0" value="${p.cashPrice}"></label>
           <label class="field"><span>Crédito</span><input class="f-field" data-key="creditPrice" type="number" min="0" value="${p.creditPrice}"></label>
-        </div>
+        </div>`}
         <div class="prow-actions">
           <button class="btn-mini gold btn-sell" ${isOut ? "disabled" : ""}>Vender</button>
-          <button class="btn-mini danger btn-archive">Archivar</button>
+          ${isSeller ? "" : `<button class="btn-mini danger btn-archive">Archivar</button>`}
         </div>
       </div>`;
   }
@@ -780,6 +818,8 @@
     if (getToken()) {
       closeGate();
       try {
+        await fetchRole();
+        applyRoleUI();
         await loadProducts();
       } catch (err) {
         if (!err.unauthorized) showToast(err.message, true);
@@ -795,6 +835,8 @@
     setToken(val);
     closeGate();
     try {
+      await fetchRole();
+      applyRoleUI();
       await loadProducts();
     } catch (err) {
       if (err.unauthorized) return;

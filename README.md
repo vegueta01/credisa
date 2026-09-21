@@ -30,7 +30,7 @@ El catálogo, el inventario y todo lo demás **ya no vive en un archivo estátic
 `docker-compose.yml` a secas no publica ningún puerto (así lo requiere EasyPanel, ver abajo), así que en tu máquina hay que sumarle `docker-compose.local.yml`, que le agrega el puerto 8084 y nombres fijos de contenedor solo para pruebas:
 
 ```bash
-cp .env.example .env   # solo la primera vez — pon tu propio ADMIN_TOKEN
+cp .env.example .env   # solo la primera vez — pon tu propio ADMIN_TOKEN y SELLER_TOKEN
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 # abrir http://localhost:8084
 ```
@@ -42,7 +42,7 @@ Esto levanta dos servicios: `web` (Nginx, sirve el sitio) y `api` (catálogo, in
 Este proyecto corre en EasyPanel, que orquesta sus propios nombres de contenedor y el enrutamiento del dominio hacia el puerto del contenedor. Por eso `docker-compose.yml` **no** trae `container_name` ni `ports` — si los tuviera, EasyPanel avisa que "pueden causar conflictos" (es justo el warning que viste). No agregues esos campos ahí; para pruebas locales usa `docker-compose.local.yml` como se explicó arriba.
 
 1. Sube el repo (git) o copia la carpeta al servidor — EasyPanel normalmente despliega directo desde el repositorio de Git.
-2. En EasyPanel, crea la app apuntando a este `docker-compose.yml` y define la variable de entorno **`ADMIN_TOKEN`** en la sección de variables del servicio `api` (un valor propio, largo — `openssl rand -hex 24`). No hace falta archivo `.env` en el servidor si EasyPanel te deja poner variables de entorno desde su UI; si prefieres usar `.env`, créalo igual que en local (`cp .env.example .env` y edítalo) en la carpeta del proyecto en la VPS.
+2. En EasyPanel, crea la app apuntando a este `docker-compose.yml` y define las variables de entorno **`ADMIN_TOKEN`** y **`SELLER_TOKEN`** en la sección de variables del servicio `api` (valores propios, largos — `openssl rand -hex 24` cada uno; si dejas `SELLER_TOKEN` vacío, el acceso de vendedor queda deshabilitado). No hace falta archivo `.env` en el servidor si EasyPanel te deja poner variables de entorno desde su UI; si prefieres usar `.env`, créalo igual que en local (`cp .env.example .env` y edítalo) en la carpeta del proyecto en la VPS.
 3. En la configuración de dominio de EasyPanel, apunta el dominio al servicio **`web`**, puerto **80** (ese es el que expone su Dockerfile). EasyPanel se encarga del certificado SSL.
 4. El catálogo, inventario, ventas y cierres se guardan en el volumen Docker `stock-data`, así que sobreviven a los redeploys.
 
@@ -50,10 +50,12 @@ Actualizar el sitio después de un cambio: vuelve a desplegar desde EasyPanel (o
 
 ## Panel de administración
 
-Hay una URL oculta — no aparece en ningún menú ni enlace del sitio — con 4 pestañas:
+Hay una URL oculta — no aparece en ningún menú ni enlace del sitio — con dos niveles de acceso, según qué token se ingrese:
 
 - **URL**: `https://tu-dominio.com/panel-27d9e5e73b/` (guárdala en tus marcadores; no la compartas).
-- **Acceso**: la primera vez pide un token — es el valor de `ADMIN_TOKEN` en tu `.env`/variables de entorno. El navegador lo recuerda después (salvo que uses "Salir" o cambies de dispositivo).
+- **Token de administrador** (`ADMIN_TOKEN`): entra con las 4 pestañas completas — Inventario (editable), Créditos, Cierre y Agregar.
+- **Token de vendedor** (`SELLER_TOKEN`): entra al mismo panel pero solo ve una lista de perfumes (stock y precios de contado/crédito, sin precio de compra) con el botón **Vender** — sin campos editables, sin botón de archivar, y sin las pestañas de Créditos/Cierre/Agregar. Así puedes darle este segundo token a la persona que vende sin exponerle el margen del negocio ni el resto de la administración. Si `SELLER_TOKEN` no está configurado, ese acceso queda deshabilitado (nadie puede entrar con él).
+- El navegador recuerda el token que ingreses (salvo que uses "Salir" o cambies de dispositivo).
 
 ### Inventario
 
@@ -85,7 +87,8 @@ Un cierre reparte la plata entre vendedor e inversionista (nombres editables en 
 
 - Todo esto vive en `api/server.js`, guardado como JSON en el volumen `stock-data` (`products.json`, `sales.json`, `payments.json`, `closings.json`, `config.json` — mismo patrón simple que usaba el `stock.json` original, sin base de datos).
 - Las fotos subidas desde el panel se guardan en ese mismo volumen y se sirven vía `/api/uploads/...`.
-- **Cambiar el token**: edita `ADMIN_TOKEN` en `.env`/variables de entorno y corre `docker compose up -d` (no hace falta `--build`). Los navegadores con el token viejo guardado dejarán de poder escribir hasta que ingreses el nuevo.
+- **Cambiar un token**: edita `ADMIN_TOKEN` y/o `SELLER_TOKEN` en `.env`/variables de entorno y corre `docker compose up -d` (no hace falta `--build`). Los navegadores con el token viejo guardado dejarán de poder escribir hasta que ingreses el nuevo.
+- Cada token define el rol vía `GET /api/admin/whoami` (`{ role: "admin" | "seller" }`); todas las rutas de escritura fuera de "Agregar venta" y ver el inventario están protegidas en el propio backend para el rol `seller` (no es solo una restricción visual del panel).
 - Cambiar la URL del panel: renombra la carpeta `public/panel-27d9e5e73b/` y actualiza esa ruta en el bloque `location ^~ /panel-.../` de `nginx.conf`.
 
 ## Contacto / WhatsApp

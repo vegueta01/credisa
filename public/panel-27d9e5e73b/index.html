@@ -295,6 +295,10 @@
   <section class="tab-panel" id="tab-creditos">
     <h2 class="section-title">Ventas registradas</h2>
     <p class="section-sub">Registra cada abono que te paguen a crédito (el saldo llega a 0 cuando queda pagada por completo). Si una venta quedó mal registrada, puedes deshacerla mientras no haya entrado todavía en un cierre.</p>
+    <div class="search-box" id="salesSearchBox">
+      <input type="text" id="salesSearch" placeholder="Buscar por comprador, perfume o marca..." autocomplete="off">
+      <button type="button" class="search-clear" id="salesSearchClear" aria-label="Limpiar búsqueda">✕</button>
+    </div>
     <div id="creditList"></div>
   </section>
 
@@ -714,18 +718,33 @@
   });
 
   // ---------------------------------------------------------------- Ventas
+  let SALES = [];
+  let salesQuery = "";
+
   async function loadSales(){
     const list = $("#creditList");
-    let sales;
     try {
-      sales = await api("/api/admin/sales");
+      SALES = await api("/api/admin/sales");
     } catch (err) {
       if (err.unauthorized) return;
       list.innerHTML = `<div class="empty-hint">${err.message}</div>`;
       return;
     }
-    if (!sales.length) {
+    renderSalesList();
+  }
+
+  function renderSalesList(){
+    const list = $("#creditList");
+    if (!SALES.length) {
       list.innerHTML = `<div class="empty-hint">Aún no hay ventas registradas.</div>`;
+      return;
+    }
+    const q = normalize(salesQuery.trim());
+    const sales = q
+      ? SALES.filter((s) => normalize(s.buyerName).includes(q) || normalize(s.productName).includes(q) || normalize(s.brand).includes(q))
+      : SALES;
+    if (!sales.length) {
+      list.innerHTML = `<div class="empty-hint">No hay ventas que coincidan con "${salesQuery}".</div>`;
       return;
     }
     list.innerHTML = sales.map((s) => {
@@ -761,6 +780,20 @@
       row.querySelector(".btn-undo").addEventListener("click", () => undoSale(id, row));
     });
   }
+
+  const salesSearch = $("#salesSearch"), salesSearchBox = $("#salesSearchBox"), salesSearchClear = $("#salesSearchClear");
+  salesSearch.addEventListener("input", () => {
+    salesQuery = salesSearch.value;
+    salesSearchBox.classList.toggle("has-value", !!salesQuery);
+    renderSalesList();
+  });
+  salesSearchClear.addEventListener("click", () => {
+    salesQuery = "";
+    salesSearch.value = "";
+    salesSearchBox.classList.remove("has-value");
+    renderSalesList();
+    salesSearch.focus();
+  });
 
   async function registerPayment(saleId, row){
     const input = row.querySelector(".abono-input");

@@ -494,7 +494,7 @@ const server = http.createServer(async (req, res) => {
       const sales = readJSON(FILES.sales, []);
       const payments = readJSON(FILES.payments, []);
       if (initialAmount > 0) {
-        payments.push({ id: newId(), saleId: sale.id, amount: initialAmount, date: now, closingId: null });
+        payments.push({ id: newId(), saleId: sale.id, amount: initialAmount, date: now, closingId: null, initial: true });
         sale.amountPaid = initialAmount;
         sale.fullyPaid = initialAmount >= total;
         sale.fullyPaidAt = sale.fullyPaid ? now : null;
@@ -521,7 +521,7 @@ const server = http.createServer(async (req, res) => {
           const salePayments = payments
             .filter((p) => p.saleId === s.id)
             .sort((a, b) => (a.date < b.date ? -1 : 1))
-            .map((p) => ({ id: p.id, amount: p.amount, date: p.date, closed: p.closingId != null }));
+            .map((p) => ({ id: p.id, amount: p.amount, date: p.date, closed: p.closingId != null, initial: !!p.initial }));
           // Solo se puede deshacer una venta mientras ninguno de sus pagos
           // haya sido entregado ya en un cierre (si no, se descuadra la caja).
           const canUndo = !salePayments.some((p) => p.closed);
@@ -592,6 +592,51 @@ const server = http.createServer(async (req, res) => {
       writeJSON(FILES.sales, sales);
 
       return sendJSON(res, 200, { sale, payment });
+    }
+
+    // -------------------- PATCH /api/admin/sales/:id/payments/:paymentId (editar abono) --------------------
+    const editPaymentMatch = pathname.match(/^\/api\/admin\/sales\/([^/]+)\/payments\/([^/]+)$/);
+    if (editPaymentMatch && method === "PATCH") {
+      if (!requireAdmin()) return;
+      const saleId = decodeURIComponent(editPaymentMatch[1]);
+      const paymentId = decodeURIComponent(editPaymentMatch[2]);
+      const body = await readJSONBody(req);
+      const newAmount = toMoney(body.amount, NaN);
+      if (!Number.isFinite(newAmount) || newAmount <= 0) return sendJSON(res, 400, { error: "monto inválido" });
+
+      const sales = readJSON(FILES.sales, []);
+      const sIdx = sales.findIndex((s) => s.id === saleId);
+      if (sIdx === -1) return sendJSON(res, 404, { error: "venta no encontrada" });
+      const sale = sales[sIdx];
+
+      const payments = readJSON(FILES.payments, []);
+      const pIdx = payments.findIndex((p) => p.id === paymentId && p.saleId === saleId);
+      if (pIdx === -1) return sendJSON(res, 404, { error: "abono no encontrado" });
+      if (payments[pIdx].closingId != null) {
+        return sendJSON(res, 400, { error: "este abono ya fue incluido en un cierre, no se puede editar" });
+      }
+
+      const otherPaymentsSum = payments
+        .filter((p) => p.saleId === saleId && p.id !== paymentId)
+        .reduce((sum, p) => sum + p.amount, 0);
+      if (otherPaymentsSum + newAmount > sale.total) {
+        return sendJSON(res, 400, { error: `el total pagado no puede superar ${sale.total}` });
+      }
+
+      payments[pIdx] = { ...payments[pIdx], amount: newAmount };
+      writeJSON(FILES.payments, payments);
+
+      const amountPaid = otherPaymentsSum + newAmount;
+      const fullyPaid = amountPaid >= sale.total;
+      sales[sIdx] = {
+        ...sale,
+        amountPaid,
+        fullyPaid,
+        fullyPaidAt: fullyPaid ? (sale.fullyPaidAt || new Date().toISOString()) : null,
+      };
+      writeJSON(FILES.sales, sales);
+
+      return sendJSON(res, 200, { sale: sales[sIdx], payment: payments[pIdx] });
     }
 
     // -------------------- POST /api/admin/closings --------------------

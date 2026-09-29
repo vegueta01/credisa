@@ -140,10 +140,15 @@
     margin-top:12px; padding-top:12px; border-top:1px solid var(--panel-line);
     display:flex; flex-direction:column; gap:6px;
   }
-  .payment-row{ display:flex; justify-content:space-between; gap:10px; font-size:13px; }
+  .payment-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; }
   .payment-row.pending{ color:var(--gold-soft); }
   .payment-row.closed{ color:var(--cream-dim); opacity:.65; }
-  .payment-badge{ font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; }
+  .payment-badge{ font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; flex:none; }
+  .payment-edit-input{
+    background:var(--ink-soft); border:1px solid var(--panel-line); color:var(--gold-soft);
+    padding:5px 8px; border-radius:4px; font-size:13px; width:100px; outline:none;
+  }
+  .payment-edit-input:focus{ border-color:var(--gold); }
   .empty-hint{ font-size:15px; color:var(--cream-dim); padding:22px 0; text-align:center; }
 
   /* ---- Cierre ---- */
@@ -759,12 +764,18 @@
     list.innerHTML = sales.map((s) => {
       const pending = s.paymentType === "credito" && !s.fullyPaid;
       const statusText = s.fullyPaid ? "Pagada" : `Pendiente: ${money(s.balance)} de ${money(s.total)}`;
-      const paymentsList = (s.payments || []).map((p) => `
-        <div class="payment-row ${p.closed ? "closed" : "pending"}">
-          <span>${new Date(p.date).toLocaleDateString("es-CO")}</span>
-          <span>${money(p.amount)}</span>
+      const paymentsList = (s.payments || []).map((p) => {
+        const dateLabel = new Date(p.date).toLocaleDateString("es-CO");
+        const label = p.initial && s.paymentType === "credito" ? `Abono inicial · ${dateLabel}` : dateLabel;
+        return `
+        <div class="payment-row ${p.closed ? "closed" : "pending"}" data-payment-id="${p.id}">
+          <span>${label}</span>
+          ${p.closed
+            ? `<span>${money(p.amount)}</span>`
+            : `<input type="number" class="payment-edit-input" min="1" max="${s.balance + p.amount}" value="${p.amount}">`}
           <span class="payment-badge">${p.closed ? "Ya en cierre" : "Sin cerrar"}</span>
-        </div>`).join("");
+        </div>`;
+      }).join("");
       return `
       <div class="crow" data-id="${s.id}">
         <div class="crow-top">
@@ -794,7 +805,28 @@
       const abonoBtn = row.querySelector(".abono-btn");
       if (abonoBtn) abonoBtn.addEventListener("click", () => registerPayment(id, row));
       row.querySelector(".btn-undo").addEventListener("click", () => undoSale(id, row));
+      $$(".payment-edit-input", row).forEach((input) => {
+        const paymentId = input.closest(".payment-row").dataset.paymentId;
+        input.addEventListener("change", () => editPayment(id, paymentId, input));
+      });
     });
+  }
+
+  async function editPayment(saleId, paymentId, input){
+    const newAmount = Number(input.value);
+    if (!newAmount || newAmount <= 0) return showToast("Monto inválido", true);
+    input.disabled = true;
+    try {
+      await api(`/api/admin/sales/${encodeURIComponent(saleId)}/payments/${encodeURIComponent(paymentId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ amount: newAmount }),
+      });
+      showToast("Abono actualizado");
+      await loadSales();
+    } catch (err) {
+      if (!err.unauthorized) showToast(err.message, true);
+      input.disabled = false;
+    }
   }
 
   const salesSearch = $("#salesSearch"), salesSearchBox = $("#salesSearchBox"), salesSearchClear = $("#salesSearchClear");

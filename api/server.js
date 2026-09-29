@@ -518,10 +518,14 @@ const server = http.createServer(async (req, res) => {
       }
       list = list
         .map((s) => {
+          const salePayments = payments
+            .filter((p) => p.saleId === s.id)
+            .sort((a, b) => (a.date < b.date ? -1 : 1))
+            .map((p) => ({ id: p.id, amount: p.amount, date: p.date, closed: p.closingId != null }));
           // Solo se puede deshacer una venta mientras ninguno de sus pagos
           // haya sido entregado ya en un cierre (si no, se descuadra la caja).
-          const hasClosedPayments = payments.some((p) => p.saleId === s.id && p.closingId != null);
-          return { ...s, balance: s.total - s.amountPaid, canUndo: !hasClosedPayments };
+          const canUndo = !salePayments.some((p) => p.closed);
+          return { ...s, balance: s.total - s.amountPaid, canUndo, payments: salePayments };
         })
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
       return sendJSON(res, 200, list);

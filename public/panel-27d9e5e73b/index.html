@@ -135,6 +135,15 @@
   }
   .crow-actions{ margin-top:10px; padding-top:10px; border-top:1px solid var(--panel-line); }
   .crow-actions .btn-undo{ width:100%; }
+
+  .crow-payments{
+    margin-top:12px; padding-top:12px; border-top:1px solid var(--panel-line);
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .payment-row{ display:flex; justify-content:space-between; gap:10px; font-size:13px; }
+  .payment-row.pending{ color:var(--gold-soft); }
+  .payment-row.closed{ color:var(--cream-dim); opacity:.65; }
+  .payment-badge{ font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; }
   .empty-hint{ font-size:15px; color:var(--cream-dim); padding:22px 0; text-align:center; }
 
   /* ---- Cierre ---- */
@@ -750,6 +759,12 @@
     list.innerHTML = sales.map((s) => {
       const pending = s.paymentType === "credito" && !s.fullyPaid;
       const statusText = s.fullyPaid ? "Pagada" : `Pendiente: ${money(s.balance)} de ${money(s.total)}`;
+      const paymentsList = (s.payments || []).map((p) => `
+        <div class="payment-row ${p.closed ? "closed" : "pending"}">
+          <span>${new Date(p.date).toLocaleDateString("es-CO")}</span>
+          <span>${money(p.amount)}</span>
+          <span class="payment-badge">${p.closed ? "Ya en cierre" : "Sin cerrar"}</span>
+        </div>`).join("");
       return `
       <div class="crow" data-id="${s.id}">
         <div class="crow-top">
@@ -762,6 +777,7 @@
             ${statusText}
           </div>
         </div>
+        ${paymentsList ? `<div class="crow-payments">${paymentsList}</div>` : ""}
         ${pending ? `
         <div class="crow-abono">
           <input type="number" min="1" max="${s.balance}" placeholder="Monto del abono" class="abono-input">

@@ -107,7 +107,7 @@
   }
   .field input:focus, .field select:focus{ border-color:var(--gold); }
 
-  .prow-actions{ display:flex; gap:8px; flex:none; }
+  .prow-actions{ display:flex; gap:8px; flex-wrap:wrap; flex:none; }
   .btn-mini{
     font-size:13px; letter-spacing:.05em; text-transform:uppercase; padding:9px 12px;
     border-radius:999px; border:1px solid var(--panel-line); background:transparent; color:var(--cream);
@@ -534,6 +534,14 @@
       $(".btn-sell", row).addEventListener("click", () => openSellModal(slug));
       const archiveBtn = $(".btn-archive", row);
       if (archiveBtn) archiveBtn.addEventListener("click", () => archiveProduct(slug));
+      const photoBtn = $(".btn-photo", row);
+      const photoInput = $(".photo-input", row);
+      if (photoBtn && photoInput) {
+        photoBtn.addEventListener("click", () => photoInput.click());
+        photoInput.addEventListener("change", () => {
+          if (photoInput.files[0]) uploadPhoto(slug, photoInput.files[0]);
+        });
+      }
     });
 
     $("#statTotal").textContent = filtered.length;
@@ -562,7 +570,10 @@
         </div>`}
         <div class="prow-actions">
           <button class="btn-mini gold btn-sell" ${isOut ? "disabled" : ""}>Vender</button>
-          ${isSeller ? "" : `<button class="btn-mini danger btn-archive">Archivar</button>`}
+          ${isSeller ? "" : `
+          <button class="btn-mini btn-photo" type="button">Cambiar foto</button>
+          <input type="file" accept="image/*" class="photo-input" hidden>
+          <button class="btn-mini danger btn-archive">Archivar</button>`}
         </div>
       </div>`;
   }
@@ -594,6 +605,21 @@
       await api(`/api/admin/products/${encodeURIComponent(slug)}`, { method: "DELETE" });
       await loadProducts();
       showToast("Producto archivado");
+    } catch (err) {
+      if (!err.unauthorized) showToast(err.message, true);
+    }
+  }
+
+  async function uploadPhoto(slug, file){
+    showToast("Subiendo foto...");
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const updated = await api(`/api/admin/products/${encodeURIComponent(slug)}/photo`, { method: "POST", body: fd });
+      const idx = PRODUCTS.findIndex((p) => p.slug === slug);
+      if (idx !== -1) PRODUCTS[idx] = updated;
+      renderInventory();
+      showToast("Foto actualizada");
     } catch (err) {
       if (!err.unauthorized) showToast(err.message, true);
     }

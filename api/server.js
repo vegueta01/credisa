@@ -366,6 +366,43 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 201, product);
     }
 
+    // -------------------- POST /api/admin/products/:slug/photo (reemplazar foto) --------------------
+    const photoMatch = pathname.match(/^\/api\/admin\/products\/([^/]+)\/photo$/);
+    if (photoMatch && method === "POST") {
+      if (!requireAdmin()) return;
+      const slug = decodeURIComponent(photoMatch[1]);
+      const products = readJSON(FILES.products, []);
+      const idx = products.findIndex((p) => p.slug === slug);
+      if (idx === -1) return sendJSON(res, 404, { error: "producto no encontrado" });
+      const p = products[idx];
+
+      const { file } = await parseMultipart(req);
+      if (!file) return sendJSON(res, 400, { error: "se requiere una imagen" });
+      const ext = (file.filename || "").split(".").pop().toLowerCase();
+      const safeExt = ALLOWED_EXT[ext] ? ext : (file.mimeType === "image/webp" ? "webp" : file.mimeType === "image/png" ? "png" : "jpg");
+
+      const dir = path.join(UPLOADS_DIR, p.category);
+      fs.mkdirSync(dir, { recursive: true });
+      const filename = `${slug}.${safeExt}`;
+      fs.writeFileSync(path.join(dir, filename), file.buffer);
+
+      // Si la extensión cambió (p. ej. de .jpg a .webp), borra el archivo viejo
+      // para no dejar fotos huérfanas en el volumen.
+      const oldFilename = p.img.split("/").pop().split("?")[0];
+      if (oldFilename && oldFilename !== filename) {
+        const oldPath = path.join(dir, oldFilename);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      // "?v=" invalida el caché de 30 días que nginx pone a las imágenes
+      // (ver nginx.conf), igual que "?v=" en app.js/styles.css — si no, el
+      // navegador seguiría mostrando la foto vieja hasta que expire el caché.
+      const now = new Date().toISOString();
+      products[idx] = { ...p, img: `/api/uploads/${p.category}/${filename}?v=${Date.now()}`, updatedAt: now };
+      writeJSON(FILES.products, products);
+      return sendJSON(res, 200, products[idx]);
+    }
+
     // -------------------- PATCH /api/admin/products/:slug --------------------
     const productMatch = pathname.match(/^\/api\/admin\/products\/([^/]+)$/);
     if (productMatch && method === "PATCH") {

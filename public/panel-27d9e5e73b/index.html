@@ -167,10 +167,28 @@
   }
   .btn-gold-full:disabled{ opacity:.5; cursor:not-allowed; }
 
+  .closing-sales-detail{ margin-bottom:16px; }
+  .closing-sales-detail .detail-title{
+    font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--cream-dim); margin-bottom:8px;
+  }
+  .sale-detail-item{
+    display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 10px; font-size:13.5px;
+    padding:8px 0; border-bottom:1px solid var(--panel-line);
+  }
+  .sale-detail-item:last-child{ border-bottom:none; }
+  .sale-detail-main{ color:var(--cream); flex:1 1 220px; }
+  .sale-detail-main .dim{ color:var(--cream-dim); font-weight:400; }
+  .sale-detail-money{ text-align:right; color:var(--cream-dim); font-size:12px; flex:none; }
+  .sale-detail-money strong{ display:block; color:var(--gold-soft); font-size:14px; white-space:nowrap; }
+  .sale-detail-money .tag-abono{ color:var(--gold-soft); }
+
   table.hist{ width:100%; border-collapse:collapse; font-size:14.5px; }
   table.hist th, table.hist td{ padding:10px 7px; text-align:left; border-bottom:1px solid var(--panel-line); }
   table.hist th{ color:var(--gold); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
   table.hist td.num{ text-align:right; color:var(--cream-dim); }
+  .hist-detail-row td{ padding:0 7px 14px; }
+  .hist-detail-row.hidden{ display:none; }
+  .hist-detail-row .sale-detail-item{ font-size:13px; }
 
   .settings-inline{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
   .settings-inline .field{ flex:1 1 170px; }
@@ -334,13 +352,14 @@
         <div class="closing-item"><span id="pvSellerLabel">Comisión vendedor</span><strong id="pvSeller">$0</strong></div>
         <div class="closing-item hl"><span id="pvInvestorLabel">Le entregas al inversionista</span><strong id="pvInvestor">$0</strong></div>
       </div>
+      <div class="closing-sales-detail" id="pvSalesDetail"></div>
       <button class="btn-gold-full" id="closeBtn">Confirmar cierre</button>
     </div>
 
     <h2 class="section-title">Historial de cierres</h2>
     <div style="overflow-x:auto;">
       <table class="hist" id="closingHistory">
-        <thead><tr><th>Fecha</th><th class="num">Efectivo</th><th class="num">Capital</th><th class="num">Ganancia</th><th class="num">Comisión</th><th class="num">Inversionista</th></tr></thead>
+        <thead><tr><th>Fecha</th><th class="num">Efectivo</th><th class="num">Capital</th><th class="num">Ganancia</th><th class="num">Comisión</th><th class="num">Inversionista</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -878,6 +897,26 @@
   }
 
   // ---------------------------------------------------------------- Cierre
+  function saleDetailItemHtml(s){
+    const typeLabel = s.paymentType === "credito" ? "Crédito" : "Contado";
+    const money2 = (n) => money(n);
+    const rightSide = s.settledHere
+      ? `<strong>${money2(s.total)}</strong><span>liquidada</span>`
+      : `<strong class="tag-abono">${money2(s.amountInClosing)}</strong><span>abono (venta de ${money2(s.total)})</span>`;
+    return `
+      <div class="sale-detail-item">
+        <div class="sale-detail-main">
+          ${s.brand} — ${s.productName} <span class="dim">· x${s.quantity} · ${typeLabel} · ${money2(s.unitSoldPrice)} c/u</span>
+        </div>
+        <div class="sale-detail-money">${rightSide}</div>
+      </div>`;
+  }
+
+  function salesDetailBlockHtml(sales, emptyText){
+    if (!sales || !sales.length) return `<div class="empty-hint">${emptyText}</div>`;
+    return sales.map(saleDetailItemHtml).join("");
+  }
+
   async function loadClosings(){
     try {
       const [cfg, preview, history] = await Promise.all([
@@ -895,8 +934,12 @@
       $("#pvInvestor").textContent = money(preview.investorAmount);
       $("#closeBtn").disabled = preview.pendingPaymentsCount === 0;
 
+      $("#pvSalesDetail").innerHTML = `
+        <div class="detail-title">Ventas incluidas en este cierre</div>
+        ${salesDetailBlockHtml(preview.sales, "No hay ventas pendientes por cerrar.")}`;
+
       const tbody = $("#closingHistory tbody");
-      tbody.innerHTML = history.length ? history.map((c) => `
+      tbody.innerHTML = history.length ? history.map((c, idx) => `
         <tr>
           <td>${new Date(c.date).toLocaleString("es-CO")}</td>
           <td class="num">${money(c.cashCollected)}</td>
@@ -904,7 +947,20 @@
           <td class="num">${money(c.totalProfit)}</td>
           <td class="num">${money(c.sellerCommission)}</td>
           <td class="num">${money(c.investorAmount)}</td>
-        </tr>`).join("") : `<tr><td colspan="6" class="empty-hint">Aún no hay cierres.</td></tr>`;
+          <td><button class="btn-mini toggle-detail" type="button" data-idx="${idx}">Ver</button></td>
+        </tr>
+        <tr class="hist-detail-row hidden" data-idx="${idx}">
+          <td colspan="7">${salesDetailBlockHtml(c.sales, "Este cierre no tiene ventas asociadas.")}</td>
+        </tr>`).join("") : `<tr><td colspan="7" class="empty-hint">Aún no hay cierres.</td></tr>`;
+
+      $$(".toggle-detail", tbody).forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const row = tbody.querySelector(`.hist-detail-row[data-idx="${btn.dataset.idx}"]`);
+          const willShow = row.classList.contains("hidden");
+          row.classList.toggle("hidden", !willShow);
+          btn.textContent = willShow ? "Ocultar" : "Ver";
+        });
+      });
     } catch (err) {
       if (!err.unauthorized) showToast(err.message, true);
     }

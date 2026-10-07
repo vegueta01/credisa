@@ -241,6 +241,43 @@ function publicProduct(p) {
   return { slug: p.slug, category: p.category, brand: p.brand, name: p.name, note: p.note, img: p.img, agotado: p.stock <= 0 };
 }
 
+// Reconstruye, para un cierre (ya hecho o en vista previa), el detalle de
+// ventas involucradas: cuántos perfumes, a cómo y de contado/crédito — a
+// partir de los pagos que entran en ese cierre, sin guardar nada duplicado
+// (las ventas/pagos ya cerrados quedan congelados, así que esto es seguro
+// de recalcular siempre que haga falta).
+function buildClosingSalesDetail(paymentIds, settledSaleIds) {
+  const sales = readJSON(FILES.sales, []);
+  const payments = readJSON(FILES.payments, []);
+  const paymentIdSet = new Set(paymentIds);
+  const settledSet = new Set(settledSaleIds);
+
+  const amountBySale = new Map();
+  for (const p of payments) {
+    if (!paymentIdSet.has(p.id)) continue;
+    amountBySale.set(p.saleId, (amountBySale.get(p.saleId) || 0) + p.amount);
+  }
+
+  return Array.from(amountBySale.entries())
+    .map(([saleId, amountInClosing]) => {
+      const sale = sales.find((s) => s.id === saleId);
+      if (!sale) return null;
+      return {
+        slug: sale.slug,
+        productName: sale.productName,
+        brand: sale.brand,
+        quantity: sale.quantity,
+        paymentType: sale.paymentType,
+        unitSoldPrice: sale.unitSoldPrice,
+        total: sale.total,
+        amountInClosing,
+        settledHere: settledSet.has(saleId),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.productName.localeCompare(b.productName));
+}
+
 // ---------------------------------------------------------------------------
 // Servidor
 // ---------------------------------------------------------------------------
@@ -683,13 +720,15 @@ const server = http.createServer(async (req, res) => {
       closings.push(closing);
       writeJSON(FILES.closings, closings);
 
-      return sendJSON(res, 201, closing);
+      return sendJSON(res, 201, { ...closing, sales: buildClosingSalesDetail(closing.paymentIds, closing.settledSaleIds) });
     }
 
     // -------------------- GET /api/admin/closings --------------------
     if (pathname === "/api/admin/closings" && method === "GET") {
       if (!requireAdmin()) return;
-      const closings = readJSON(FILES.closings, []).sort((a, b) => (a.date < b.date ? 1 : -1));
+      const closings = readJSON(FILES.closings, [])
+        .sort((a, b) => (a.date < b.date ? 1 : -1))
+        .map((c) => ({ ...c, sales: buildClosingSalesDetail(c.paymentIds, c.settledSaleIds) }));
       return sendJSON(res, 200, closings);
     }
 
@@ -713,6 +752,7 @@ const server = http.createServer(async (req, res) => {
         totalProfit,
         sellerCommission,
         investorAmount,
+        sales: buildClosingSalesDetail(pendingPayments.map((p) => p.id), settledSales.map((s) => s.id)),
       });
     }
 
